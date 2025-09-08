@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Multi-user Chat with Backend Integration, NER + OCR Sensitive Data Detection</title>
+    <style>
+        /* Basic reset */
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            height: 100%;
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f5f8fa;
+        }
+
+        body,
+        #app {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #app {
+            max-width: 960px;
+            margin: auto;
+            background: white;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Login screen */
+        #login-screen {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 0 16px;
+        }
+
+        #login-screen h2 {
+            margin-bottom: 16px;
+        }
+
+        #login-screen input {
+            padding: 10px 12px;
+            font-size: 16px;
+            border-radius: 8px;
+            border: 1px solid #ccc;
+            width: 260px;
+            margin-top: 8px;
+        }
+
+        #login-screen button {
+            margin-top: 16px;
+            padding: 10px 20px;
+            font-size: 16px;
+            border: none;
+            border-radius: 8px;
+            background-color: #0084ff;
+            color: white;
+            cursor: pointer;
+        }
+
+        #login-screen button:disabled {
+            background-color: #aaa;
+            cursor: not-allowed;
+        }
+
+        #login-error {
+            color: #b00000;
+            margin-top: 8px;
+            height: 18px;
+        }
+
+        /* Main chat container layout */
+        #main-screen {
+            display: flex;
+            flex: 1;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        #user-list {
+            width: 220px;
+            border-right: 1px solid #ccc;
+            background: #eef3f8;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #user-list h3 {
+            margin: 12px;
+            color: #333;
+        }
+
+        #users {
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .user-item {
+            padding: 10px 16px;
+            border-bottom: 1px solid #d6dce6;
+            cursor: pointer;
+            user-select: none;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .user-item:hover {
+            background-color: #d9eaff;
+        }
+
+        .user-item.selected {
+            background-color: #0084ff;
+            color: white;
+        }
+
+        #logout-btn {
+            background: none;
+            border: none;
+            color: #555;
+            font-size: 0.9em;
+            padding: 10px 16px;
+            cursor: pointer;
+            border-top: 1px solid #ccc;
+            user-select: none;
+        }
+
+        #logout-btn:hover {
+            background-color: #f8d7da;
+            color: #b00000;
+        }
+
+        /* Chat area */
+        #chat-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+
+        #chat-header {
+            padding: 14px 20px;
+            background-color: #0084ff;
+            color: white;
+            font-weight: bold;
+            font-size: 1.1em;
+            border-bottom: 1px solid #0073e6;
+        }
+
+        #messages {
+            flex: 1;
+            padding: 12px 16px;
+            overflow-y: auto;
+            background: #f9fbff;
+        }
+
+        .message {
+            margin-bottom: 12px;
+            max-width: 70%;
+            border-radius: 20px;
+            padding: 10px 16px;
+            white-space: pre-wrap;
+            word-break: break-word;
+            clear: both;
+            line-height: 1.3em;
+        }
+
+        .message.self {
+            background-color: #0084ff;
+            color: white;
+            float: right;
+            text-align: right;
+        }
+
+        .message.other {
+            background-color: #d1d9ff;
+            color: #0c0c0c;
+            float: left;
+        }
+
+        .message.system {
+            background-color: #f8e9a1;
+            color: #5a4d00;
+            max-width: 90%;
+            margin: 8px auto;
+            text-align: center;
+            border-radius: 12px;
+            float: none;
+        }
+
+        #alert-box {
+            background-color: #ffc4c4;
+            color: #b00000;
+            padding: 8px 12px;
+            text-align: center;
+            font-weight: bold;
+            display: none;
+        }
+
+        #input-container {
+            display: flex;
+            padding: 10px 16px;
+            border-top: 1px solid #ccc;
+            background: #fff;
+            gap: 8px;
+        }
+
+        #text-input {
+            flex: 1;
+            font-size: 16px;
+            padding: 10px 14px;
+            border-radius: 20px;
+            border: 1px solid #ccc;
+            outline-offset: 2px;
+        }
+
+        #text-input:disabled {
+            background: #eee;
+            cursor: not-allowed;
+        }
+
+        button {
+            background-color: #0084ff;
+            border: none;
+            color: white;
+            padding: 0 16px;
+            border-radius: 20px;
+            font-size: 16px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        button:disabled {
+            background-color: #aaa;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="app" role="application" aria-live="polite" aria-atomic="true" aria-relevant="additions">
+        <section id="login-screen" aria-label="User Login">
+            <h2>Login to Chat</h2>
+            <input id="username-input" type="text" placeholder="Enter your username" aria-required="true"
+                aria-describedby="login-error" autocomplete="username" />
+            <input id="password-input" type="password" placeholder="Enter your password" aria-required="true"
+                autocomplete="current-password" />
+            <button id="login-btn" disabled>Login / Register</button>
+            <div id="login-error" aria-live="polite" role="alert"></div>
+        </section>
+
+        <section id="main-screen" style="display:none;" aria-label="Main Chat Interface">
+            <nav id="user-list" aria-label="User List">
+                <h3>Users</h3>
+                <div id="users" role="list" tabindex="0" aria-live="polite"></div>
+                <button id="logout-btn" aria-label="Logout">Logout</button>
+            </nav>
+            <main id="chat-area" aria-label="Chat area">
+                <header id="chat-header" aria-live="polite" aria-atomic="true">Chat</header>
+                <div id="messages" role="log" aria-live="polite" aria-relevant="additions"></div>
+                <div id="alert-box" role="alert" aria-live="assertive"></div>
+                <div id="input-container">
+                    <input type="text" id="text-input" placeholder="Type your message here..." autocomplete="off"
+                        aria-label="Message input" />
+                    <button id="send-btn" aria-label="Send message">Send</button>
+                    <input type="file" id="image-input" accept="image/*" style="display:none"
+                        aria-label="Upload image for OCR" />
+                    <button id="upload-btn" title="Upload image for OCR" aria-label="Upload image for OCR">📷</button>
+                </div>
+            </main>
+        </section>
+    </div>
+
+    <!-- Tesseract.js for OCR -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.0.2/dist/tesseract.min.js"></script>
+
+    <script>
+        const BASE_API_URL = 'http://localhost:3000/api'; // Change this if your backend is hosted elsewhere
+
+        // DOM Elements
+        const loginScreen = document.getElementById('login-screen');
+        const mainScreen = document.getElementById('main-screen');
+        const usernameInput = document.getElementById('username-input');
+        const passwordInput = document.getElementById('password-input');
+        const loginBtn = document.getElementById('login-btn');
+        const loginError = document.getElementById('login-error');
+        const usersDiv = document.getElementById('users');
+        const logoutBtn = document.getElementById('logout-btn');
+        const chatHeader = document.getElementById('chat-header');
+        const messagesEl = document.getElementById('messages');
+        const textInput = document.getElementById('text-input');
+        const sendBtn = document.getElementById('send-btn');
+        const imageInput = document.getElementById('image-input');
+        const uploadBtn = document.getElementById('upload-btn');
+        const alertBox = document.getElementById('alert-box');
+
+        // Sensitive words
+        const sensitiveWords = [
+            'password',
+            'ssn', 'social security number',
+            'credit card', 'ccv', 'cvv',
+            'bank account', 'routing number',
+            'phone number',
+            'address',
+            'email',
+            'passport',
+            'driver license',
+            'pin code',
+            'secret',
+            'confidential'
+        ];
+
+        // State
+        let currentUser = null;
+        let currentChatUser = null;
+        let pollingInterval = null;
+
+        // Enable login button only if username and password have valid content
+        function validateLoginInputs() {
+            const username = usernameInput.value.trim();
+            const password = passwordInput.value.trim();
+            loginBtn.disabled = !(isValidUsername(username) && password.length >= 6);
+            loginError.textContent = '';
+        }
+        usernameInput.addEventListener('input', validateLoginInputs);
+        passwordInput.addEventListener('input', validateLoginInputs);
+
+        // Username validation regex
+        function isValidUsername(name) {
+            return /^[a-zA-Z0-9_-]{2,20}$/.test(name);
+        }
+
+        // Show alert message in alert box
+        function showAlert(message) {
+            alertBox.textContent = message;
+            alertBox.style.display = 'block';
+            setTimeout(() => {
+                alertBox.style.display = 'none';
+            }, 4000);
+        }
+
+        // Sensitive text check
+        function containsSensitive(text) {
+            const lowerText = text.toLowerCase();
+            return sensitiveWords.some(word => lowerText.includes(word));
+        }
+
+        // Helper: POST JSON fetch
+        async function postJSON(url, data) {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            return response.json();
+        }
+
+        // Helper: GET JSON fetch
+        async function getJSON(url) {
+            const response = await fetch(url);
+            return response.json();
+        }
+
+        // Login handler: register or validate credentials
+        loginBtn.addEventListener('click', async () => {
+            const username = usernameInput.value.trim();
+            const password = passwordInput.value.trim();
+
+            if (!isValidUsername(username)) {
+                loginError.textContent = 'Invalid username (2-20 chars, letters, numbers, _ or - only).';
+                return;
+            }
+            if (password.length < 6) {
+                loginError.textContent = 'Password must be at least 6 characters.';
+                return;
+            }
+            loginError.textContent = '';
+            loginBtn.disabled = true;
+
+            try {
+                // First try to login
+                let loginResp = await postJSON(BASE_API_URL + '/login', { username, password });
+                if (loginResp.success) {
+                    currentUser = username;
+                    loginSuccess();
+                } else if (loginResp.error === 'Invalid username or password.') {
+                    // Try to register user as not found or password incorrect
+                    let registerResp = await postJSON(BASE_API_URL + '/register', { username, password });
+                    if (registerResp.success) {
+                        currentUser = username;
+                        loginSuccess();
+                    } else {
+                        loginError.textContent = registerResp.error || 'Registration failed.';
+                        loginBtn.disabled = false;
+                    }
+                } else {
+                    loginError.textContent = loginResp.error || 'Login failed.';
+                    loginBtn.disabled = false;
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+                loginError.textContent = 'Error during login, please try again.';
+                loginBtn.disabled = false;
+            }
+        });
+
+        // Successful login UI switch
+        async function loginSuccess() {
+            usernameInput.value = '';
+            passwordInput.value = '';
+            loginBtn.disabled = false;
+            loginScreen.style.display = 'none';
+            mainScreen.style.display = 'flex';
+            chatHeader.textContent = 'Select a user to chat';
+            clearMessages();
+            currentChatUser = null;
+            await loadUsers();
+            enableChatInput(false);
+            startPollingUsers();
+        }
+
+        // Load users from backend (excluding self)
+        async function loadUsers() {
+            try {
+                let usersResp = await getJSON(BASE_API_URL + `/users?username=${encodeURIComponent(currentUser)}`);
+                if (usersResp.users) {
+                    usersDiv.innerHTML = '';
+                    usersResp.users.forEach(username => {
+                        const userItem = document.createElement('div');
+                        userItem.classList.add('user-item');
+                        userItem.setAttribute('role', 'button');
+                        userItem.setAttribute('tabindex', '0');
+                        userItem.textContent = username;
+                        if (username === currentChatUser) userItem.classList.add('selected');
+                        userItem.addEventListener('click', () => {
+                            if (username !== currentChatUser) {
+                                switchChatUser(username);
+                            }
+                        });
+                        userItem.addEventListener('keydown', e => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                userItem.click();
+                            }
+                        });
+                        usersDiv.appendChild(userItem);
+                    });
+                }
+            } catch (error) {
+                console.error('Load users error:', error);
+                showAlert('Failed to load users.');
+            }
+        }
+
+        // Switch active chat user and load chat messages
+        async function switchChatUser(username) {
+            clearMessages();
+            currentChatUser = username;
+            chatHeader.textContent = username ? `Chat with ${username}` : 'Select a user to chat';
+            // Update UI for selected user
+            Array.from(usersDiv.children).forEach(child => {
+                if (child.textContent === username) {
+                    child.classList.add('selected');
+                } else {
+                    child.classList.remove('selected');
+                }
+            });
+            if (username) {
+                enableChatInput(true);
+                await loadMessages();
+                startPollingMessages();
+            } else {
+                enableChatInput(false);
+                stopPollingMessages();
+            }
+        }
+
+        // Enable/disable chat input controls
+        function enableChatInput(enable) {
+            textInput.disabled = !enable;
+            sendBtn.disabled = !enable;
+            uploadBtn.disabled = !enable;
+        }
+
+        // Clear message pane and stop polling
+        function clearMessages() {
+            messagesEl.innerHTML = '';
+            stopPollingMessages();
+        }
+
+        // Add message element to chat window
+        function addMessageToUI(data) {
+            const msgEl = document.createElement('div');
+            msgEl.classList.add('message');
+            if (data.system) {
+                msgEl.classList.add('system');
+                msgEl.textContent = data.text;
+                msgEl.setAttribute('aria-label', `System message: ${data.text}`);
+                msgEl.style.clear = 'both';
+            } else if (data.sender === currentUser) {
+                msgEl.classList.add('self');
+                msgEl.textContent = data.text;
+                msgEl.setAttribute('aria-label', `You said: ${data.text}`);
+                msgEl.style.float = 'right';
+            } else {
+                msgEl.classList.add('other');
+                msgEl.textContent = `${data.sender}: ${data.text}`;
+                msgEl.setAttribute('aria-label', `${data.sender} said: ${data.text}`);
+                msgEl.style.float = 'left';
+            }
+            messagesEl.appendChild(msgEl);
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
+
+        // Load messages between currentUser and currentChatUser
+        async function loadMessages() {
+            if (!currentUser || !currentChatUser) return;
+            try {
+                const url = `${BASE_API_URL}/messages?user1=${encodeURIComponent(currentUser)}&user2=${encodeURIComponent(currentChatUser)}`;
+                const resp = await getJSON(url);
+                if (resp.messages) {
+                    messagesEl.innerHTML = '';
+                    resp.messages.forEach(m => addMessageToUI(m));
+                }
+            } catch (error) {
+                console.error('Load messages error:', error);
+                showAlert('Failed to load messages.');
+            }
+        }
+
+        // Send chat message to backend
+        async function sendMessage(text) {
+            if (!text || !text.trim()) return;
+            if (!currentUser || !currentChatUser) {
+                showAlert('Select a user to chat.');
+                return;
+            }
+            if (containsSensitive(text)) {
+                showAlert('You cannot share sensitive data.');
+                return;
+            }
+            try {
+                const resp = await postJSON(BASE_API_URL + '/messages', {
+                    sender: currentUser,
+                    recipient: currentChatUser,
+                    text: text.trim()
+                });
+                if (!resp.success) {
+                    showAlert(resp.error || 'Failed to send message.');
+                } else {
+                    // Reload messages after sending
+                    await loadMessages();
+                }
+            } catch (error) {
+                console.error('Send message error:', error);
+                showAlert('Error sending message. Please try again.');
+            }
+        }
+
+        // Polling for messages every 3 seconds
+        let messagePollingTimer = null;
+        function startPollingMessages() {
+            stopPollingMessages();
+            messagePollingTimer = setInterval(loadMessages, 3000);
+        }
+
+        function stopPollingMessages() {
+            if (messagePollingTimer) {
+                clearInterval(messagePollingTimer);
+                messagePollingTimer = null;
+            }
+        }
+
+        // Polling for users every 10 seconds
+        let userPollingTimer = null;
+        function startPollingUsers() {
+            stopPollingUsers();
+            userPollingTimer = setInterval(loadUsers, 10000);
+        }
+
+        function stopPollingUsers() {
+            if (userPollingTimer) {
+                clearInterval(userPollingTimer);
+                userPollingTimer = null;
+            }
+        }
+
+        // Event handlers for chat input, send, image upload, OCR
+        sendBtn.addEventListener('click', async () => {
+            const msg = textInput.value.trim();
+            if (msg.length === 0) return;
+            await sendMessage(msg);
+            textInput.value = '';
+        });
+
+        textInput.addEventListener('keydown', e => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendBtn.click();
+            }
+        });
+
+        uploadBtn.addEventListener('click', () => {
+            if (uploadBtn.disabled) return;
+            imageInput.click();
+        });
+
+        imageInput.addEventListener('change', async () => {
+            if (imageInput.files.length === 0) return;
+            const file = imageInput.files[0];
+            // Show OCR processing system message
+            const loadingMsgObj = {
+                system: true,
+                text: 'Processing image with OCR...'
+            };
+            addMessageToUI(loadingMsgObj);
+            try {
+                const { data: { text: ocrText } } = await Tesseract.recognize(file, 'eng', { logger: () => { } });
+                // Remove last system message
+                const systemMsgs = document.querySelectorAll('.message.system');
+                if (systemMsgs.length > 0) systemMsgs[systemMsgs.length - 1].remove();
+
+                const trimmedText = ocrText.trim();
+                if (!trimmedText) {
+                    addMessageToUI({ system: true, text: 'No text detected in the image.' });
+                    imageInput.value = '';
+                    return;
+                }
+                if (containsSensitive(trimmedText)) {
+                    showAlert('You cannot share sensitive data detected in the image.');
+                    imageInput.value = '';
+                    return;
+                }
+                await sendMessage(`(Image OCR): ${trimmedText}`);
+            } catch (error) {
+                console.error('OCR error:', error);
+                const systemMsgs = document.querySelectorAll('.message.system');
+                if (systemMsgs.length > 0) systemMsgs[systemMsgs.length - 1].remove();
+                addMessageToUI({ system: true, text: 'Error processing image.' });
+            } finally {
+                imageInput.value = '';
+            }
+        });
+
+        // Logout event
+        logoutBtn.addEventListener('click', () => {
+            currentUser = null;
+            currentChatUser = null;
+            clearMessages();
+            loginScreen.style.display = 'flex';
+            mainScreen.style.display = 'none';
+            loginError.textContent = '';
+            alertBox.style.display = 'none';
+            usernameInput.value = '';
+            passwordInput.value = '';
+            loginBtn.disabled = true;
+            stopPollingMessages();
+            stopPollingUsers();
+        });
+
+    </script>
+</body>
+
+</html>
